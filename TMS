@@ -1,0 +1,435 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <bits/stdc++.h>
+using namespace std;
+#define BOLDYELLOW  "\033[1m\033[33m"      /* Bold Yellow */
+#define BOLDRED     "\033[1m\033[31m"      /* Bold Red */
+#define RESET   "\033[0m"
+#define BOLDWHITE   "\033[1m\033[37m"   
+#define BOLDCYAN    "\033[1m\033[36m" 
+vector <int> glob_in;
+vector <int> glob_out;
+vector <int> nodes_list;
+void retract_node(int);
+void recurse_in(int);
+
+struct node
+{
+	int used;
+	string statement;
+	int id;
+	vector <int> in_list;
+	vector <int> out_list;
+	vector <int> ref_in_list;
+	vector <int> ref_out_list;
+	int status; // 1 for in and 0 for out. 
+	int prem; // 1 for a premise and 0 for a non premise
+	int retr; // 1 if it has been retracted meaning that the NOT of this node is in the IN list. 0 else
+
+};
+node* nodes=new node[200];
+int make_and_see_in(int n,int node)
+{
+	int l=0;
+	//nodes[n].status=1;
+	
+	for(int i=0;i<nodes[node].in_list.size();i++)
+	{
+		if(nodes[nodes[node].in_list[i]].status!=1)
+		{
+			l++;
+		}
+	}
+	for(int i=0;i<nodes[node].out_list.size();i++)
+	{
+		if(nodes[nodes[node].out_list[i]].status!=0)
+		{
+			l++;
+		}
+	}
+	
+	//cout<<"THE VALUE OF L FOR "<<n<<" and "<<node<<" is "<<l;
+
+	if(l==0)
+	{
+		return 0;
+	}
+	else
+	{
+		return 1;
+	}
+}
+int make_and_see_out(int n,int node)
+{
+	int l=0;
+//	nodes[n].status=0; // make the change we will always be rolling back in the end of the function to maintain consistency.
+
+	for(int i=0;i<nodes[node].in_list.size();i++)
+	{
+		if(nodes[nodes[node].in_list[i]].status!=1) // if even one of the nodes that is supposed to be IN is an OUT. Then incrementn l;
+		{
+			l++; 
+		}
+	}
+	for(int i=0;i<nodes[node].out_list.size();i++)
+	{
+		if(nodes[nodes[node].out_list[i]].status!=0) // if even one of the nodes that is supposed to bve out is an IN then again increment l;
+		{
+			l++;
+		}
+	}
+	
+	//cout<<"THE VALUE OF L FOR "<<n<<" and "<<node<<" is "<<l;
+//	nodes[n].status=0;
+	if(l==0) //Now it is eligible to become an IN node.
+		return 0;
+	else 
+		return 1;
+	
+}
+void recurse_in(int n) // THE NODE N HAS BEEN CHANGED FROM STATUS OUT TO IN.(SO we have to propagte IN-NESS)
+{
+	//cout<<"THE NODE BEING MADE IN IS"<<n;
+	if(nodes[n].ref_in_list.size()==0 && nodes[n].ref_out_list.size()==0) // this means that this is the rightmost node and neednot go any further.
+	{
+		return; //we have reached the end of the dfs so just return back to the caller function.
+	}
+	for(int i=0;i<nodes[n].ref_in_list.size();i++)
+	{
+		if(make_and_see_in(n,nodes[n].ref_in_list[i])==1) // if this is true then it means that making it in an IN has had no influence at all
+		{
+			continue;
+		}
+		nodes[nodes[n].ref_in_list[i]].status=1; // managed to make the resultant node an IN by changing this to an IN.
+		recurse_in(nodes[n].ref_in_list[i]);
+	}
+	for(int i=0;i<nodes[n].ref_out_list.size();i++)
+	{
+		if(nodes[nodes[n].ref_out_list[i]].status==0) // it was already an out so do not do anything.
+		{
+			continue;
+		}
+		// but if it was an IN then it is definitely going to change.. it will become an out.
+		nodes[nodes[n].ref_out_list[i]].status=0; // make it out and now propogate;
+		retract_node(nodes[n].ref_out_list[i]);
+	}
+
+}
+void retract_node(int n)
+{
+	if(nodes[n].ref_in_list.size()==0 && nodes[n].ref_out_list.size()==0) // this means that this is the rightmost node and neednot go any further.
+	{
+		return; //we have reached the end of the dfs so just return back to the caller function.
+	}
+//	cout<<"reached 1"<<endl;
+	for(int i=0;i<nodes[n].ref_in_list.size();i++)
+	{
+		if(nodes[nodes[n].ref_in_list[i]].status==0) // if the status of the first node in the reference list is OUT.
+		{
+			//it was already an OUT and making this an OUT would not have changed anything.
+			continue;
+		}
+		nodes[nodes[n].ref_in_list[i]].status=0; // if the status was IN then make it OUT and propogate.
+		retract_node(nodes[n].ref_in_list[i]);
+	}
+//	cout<<"reched 2"<<endl;
+	for(int i=0;i<nodes[n].ref_out_list.size();i++)
+	{
+		if(make_and_see_out(n,nodes[n].ref_out_list[i])==1) 
+		{
+	//		cout<<"IT SUCCESSFULLY GOT CHNAGED";
+			// if this is true then it means that changing the node to OUT has had no Influence at all.
+			continue;
+		}
+		nodes[nodes[n].ref_out_list[i]].status=1; // make the resultant node an IN.
+		// Now we have to propogate IN.
+		recurse_in(nodes[n].ref_out_list[i]);
+
+	}
+}
+void print()
+{
+	for(int i=0;i<100;i++)
+	{
+		if(nodes[i].used==1)
+		{
+			cout<<BOLDWHITE<<"\n THE NODE ID IS: "<<i<<RESET;
+			cout<<BOLDCYAN"\n THE STATUS OF THE NODE IS: "<<nodes[i].status<<RESET;
+			cout<<"\n THE NODES IN THE SUPPORT IN LIST ARE: ";
+		 	for(int j=0;j<nodes[i].in_list.size();j++)
+		 	{
+		 		cout<<nodes[i].in_list[j]<<"  ";
+		 	}
+		 	cout<<"\n";
+		 	cout<<"\n THE NODES IN THE SUPPORT OUT LIST ARE: ";
+		 	for(int j=0;j<nodes[i].out_list.size();j++)
+		 	{
+		 		cout<<nodes[i].out_list[j]<<"  ";
+		 	}
+		 	cout<<"\n";
+		 	cout<<"\n THE NODES IN THE REFERENCED IN LIST ARE: ";
+		 	for(int j=0;j<nodes[i].ref_in_list.size();j++)
+		 	{
+		 		cout<<nodes[i].ref_in_list[j]<<"  ";
+		 	}
+		 	cout<<"\n";
+		 	cout<<"\n THE NODES IN THE REFERENCED OUT LIST ARE: ";
+		 	for(int j=0;j<nodes[i].ref_out_list.size();j++)
+		 	{
+		 		cout<<nodes[i].ref_out_list[j]<<"  ";
+		 	}
+		 	cout<<"\n";
+		}
+	}
+}
+void update_ref_list()
+{
+
+	//this functions updates all the references and the reference IN and OUT List.
+	for(int i=0;i<100;i++)
+	{
+		if(nodes[i].used==1)// ony if it is a valid node
+		{
+			for(int k=0;k<100;k++) // the now compare it with the other nodes to find it's dependent reference lists.
+			{
+				if(k!=i && nodes[k].used==1) // here we check if it is a valid node as well as making sure that it is not the node itself.
+				{
+					
+						int x=i;
+						if(std::find(nodes[k].in_list.begin(), nodes[k].in_list.end(), x) != nodes[k].in_list.end()) 
+						{
+							if(std::find(nodes[i].in_list.begin(), nodes[i].in_list.end(), k) != nodes[i].in_list.end())
+							{
+								//do nothing
+							}
+							else
+							{
+								nodes[i].ref_in_list.push_back(k); //it has not been found so add it.
+   							}
+   							
+						} 
+					
+
+					
+
+						//int x=i;
+						if(std::find(nodes[k].out_list.begin(), nodes[k].out_list.end(), x) != nodes[k].out_list.end()) 
+						{
+							if(std::find(nodes[i].out_list.begin(), nodes[i].out_list.end(), k) != nodes[i].out_list.end())
+							{
+
+							}
+							else
+							{
+								nodes[i].ref_out_list.push_back(k);
+							}
+   							// temp++;
+						} 
+					
+
+				}
+			}
+		}
+	}
+	// the entire reference list has been constructed or updated.
+
+}
+
+void fillup()
+{
+	for(int i=0;i<100;i++)
+	{
+		if(nodes[i].used==1 && nodes[i].status==-1)
+		{
+			nodes[i].status=1 ;// since all the OUT's were discovered anyways now we make all the other unknown nodes as IN as we were not able to make them an OUT.
+		}
+	}
+}
+void label(int n)
+{
+		if(nodes[n].ref_in_list.size()==0 && nodes[n].ref_out_list.size()==0) // this means that this is the rightmost node and neednot go any further.
+		{
+			return; //we have reached the end of the dfs so just return back to the caller function.
+		}
+		if(nodes[n].status==1) // meaning if it is an IN
+		{
+			//we can conclude that everything i nthe reference out list is false.
+			for(int i=0;i<nodes[n].ref_out_list.size();i++)
+			{
+				nodes[nodes[n].ref_out_list[i]].status=0; //set the status of such nodes to false.
+				label(nodes[n].ref_out_list[i]);
+			}
+		}
+		if(nodes[n].status==0) // meaning it is an OUT
+		{
+			for(int i=0;i<nodes[n].ref_in_list.size();i++)
+			{
+				nodes[nodes[n].ref_in_list[i]].status=0;
+				label(nodes[n].ref_in_list[i]);
+			}
+		}
+
+}
+void build()
+{
+	
+	cout<<"\n ENTER -1 TO STOP";
+	int i=0;
+	int k=0;
+	vector <int> local;
+	while(i!=-1)
+	{
+		
+		string a;
+		cout<<"\n PLEASE GIVE THE NODE NUMBER\n";
+		cin>>i;
+		if(i==-1)
+			break;
+		local.push_back(i);
+		cout<<"\n PLEASE GIVE THE TEXT OF THE STATEMENT\n";
+		cin>>a;
+		nodes[i].id=i;
+		nodes[i].statement=a;
+		nodes[i].used=1;
+		k++;
+	}
+	
+	cout<<"\n ENTER THE SUPPORT LIST's FOR THE JUSTIFICATIONS\n";
+	int l=0;
+	int val=0;
+	while(k>0)
+	{
+		val=local[l];
+		l++;;
+		k--;
+		int ll=0;
+		i=0;
+		cout<<BOLDYELLOW<<"\nGIVE THE IN-LIST FOR NODE NUMBER: "<<val<<"ENTER -1 TO STOP\n"<<RESET;
+		while(i!=-1)
+		{
+			cin>>i;
+			if(i==-1)
+				break;
+			ll++;
+			nodes[val].in_list.push_back(i);
+		}
+		i=0;
+		cout<<BOLDRED<<"\nGIVE THE OUT-LIST FOR NODE NUMBER - "<<val<<"ENTER -1 TO STOP\n"<<RESET;
+		while(i!=-1)
+		{
+			cin>>i;
+			if(i==-1)
+				break;
+			ll++;
+			nodes[val].out_list.push_back(i);
+		}
+		if(ll==0)
+		{
+			nodes[val].prem=1;
+		}
+	}
+	update_ref_list();
+	for(int i=0;i<100;i++)
+	{
+		if(nodes[i].prem==1 && nodes[i].retr==0)
+		{
+			nodes[i].status=1;
+			label(i);
+		}
+	}
+	fillup();
+	
+	
+}
+
+
+int main()
+{
+	for(int i=0;i<100;i++)
+	{
+		nodes[i].used=0; // to check for the validity of the node in the TMS.
+		nodes[i].prem=0; // making them all non premises initiall for initializing
+		nodes[i].retr=0;
+		nodes[i].status=-1;
+	}
+	cout<<"\n\n PLEASE GIVE THE SENTENCE NODES TO BUILD THE INITIAL TMS";
+	build();
+	int choice=0;
+	
+	while(choice!=5)
+	{
+		cout<<"\n\033[41;39m WHAT WOULD YOU LIKE TO DO NOW?\n";
+		cout<<"\n 1) ADD MORE SENTENCES\n 2) RETRACT A PREMISE\n 3) GET STATUS OF A NODE\n 4) PRINT THE STATUS OF THE TMS\n 5) QUIT\033[0m";
+	
+		cin>>choice;
+		if(choice==1)
+		{
+			cout<<"\n PLEASE GIVE ALL THE SENTENCE NODES THAT YOU WANT TO ADD\n";
+			build();
+			cout<<"\n THE SENTENCES HAVE BEEN ADDED\n";
+		}
+		else if(choice==2)
+		{
+			cout<<"\n PLEASE GIVE THE NODE ID THAT YOU WANT TO RETRACT\n";
+			int n;
+			cin>>n;
+			if(nodes[n].status==1)
+			{
+				nodes[n].status=0;
+				nodes[n].retr=1;
+				retract_node(n);
+			}
+			else 
+			{
+				nodes[n].status=1;
+				nodes[n].retr=1;
+				recurse_in(n);
+			}
+			
+			
+			cout<<"\n THE NODE HAS BEEN RETRACTED";
+			//retract_node(n);
+
+		}
+		else if(choice ==3)
+		{
+			cout<<"\n PLEASE GIVE THE NODE NUMBER FOR WHICH YOU WANT THE STATUS\n";
+			int n;
+			cin>>n;
+			if(nodes[n].used==1)
+			{
+				if(nodes[n].status==1)
+				{
+					cout<<"\n THE STATUS OF THE NODE IS IN\n";
+				}
+				else
+				{
+					cout<<"\n THE STATUS OF THE NODE IS OUT\n";
+				}
+			}
+			else
+			{
+				cout<<"\nPLEASE GIVE A VALID NODE";
+			}
+			
+		//	get_status(n);
+		}
+		else if(choice ==4)
+		{
+			cout<<"\n THE STATUS OF THE TMS IS ";
+			print();
+			//break;
+		}
+		else if(choice == 5)
+		{
+			cout<<"\n THANK YOU";
+			break;
+		}
+
+
+		
+
+	}
+	return 0;
+
+}
